@@ -1,14 +1,15 @@
 -- Imports
 local Talkies = require('talkies')
-local push = require "push"
+
 
 -- Constants
-local gameWidth, gameHeight = 640, 480
-local fontPath = "assets/font/PeaberryBase.ttf"
-local fontSize = 16
-local outputPaddingX = 24
-local outputPaddingY = 12
-local outputLineSpacing = 14
+local fontPath = "assets/font/Minecraftia-Regular.ttf"
+local baseFontSize = 12
+local baseBoxThickness = 1
+local baseBoxHeight = 30
+local outputPaddingX = 12
+local outputPaddingY = 6
+local outputLineSpacing = 30
 local outputTextColor = {0.314, 0.235, 0.482}
 local spriteWidth, spriteHeight = 320, 240
 local frameCount = 24
@@ -74,8 +75,8 @@ function readPatchOutput()
         local wrappedLines = wrapText(line, 62)
         for _, wrappedLine in ipairs(wrappedLines) do
             table.insert(patchOutput, wrappedLine)
-            if #patchOutput > 4 then
-                table.remove(patchOutput, 1)  -- Keep the output limited to the last 4 lines
+            if #patchOutput > 3 then
+                table.remove(patchOutput, 1)  -- Keep the output limited to the last 3 lines
             end
         end
 
@@ -110,11 +111,9 @@ end
 function showInitialTalkiesDialog()
     Talkies.say("Cybion", "Hello! Welcome to the PortMaster patching shop. Today we will be patching " .. gameName .. " for you.", {
         image = cybion,
-        thickness = 2,
         oncomplete = function()
             Talkies.say("Cybion", "The patch will take " .. patchTime .. ". So grab some coffee while you wait. Press A to start the patching process.", {
                 image = cybion,
-                thickness = 2,
                 oncomplete = startPatchThread  -- Start the patching in a new thread
             })
         end
@@ -124,7 +123,7 @@ end
 -- Function to show patch complete dialog
 function PatchComplete()
     Talkies.say("Cybion", "Thank you for waiting, the patching process is complete! Press A to proceed to " .. gameName .. ".", {
-        thickness = 2,
+        thickness = scaledBoxThickness,
         image = cybion,
         oncomplete = function()
             love.event.quit()  
@@ -135,7 +134,8 @@ end
 -- Function to show patch failed dialog
 function PatchFailed()
     Talkies.say("Cybion", "Patching failed! Please go to the PortMaster Discord for help.", {
-        thickness = 2,
+        thickness = scaledBoxThickness,
+		height = scaledBoxHeight,
         image = cybion,
         oncomplete = function()
             love.event.quit()  
@@ -154,26 +154,31 @@ end
 
 function love.load()
     parseCommandLineArguments()
+    love.graphics.setDefaultFilter("nearest", "nearest") -- Sets filtering globally
 
-    local windowWidth, windowHeight = love.window.getDesktopDimensions()
-    push:setupScreen(gameWidth, gameHeight, windowWidth, windowHeight, {
-        fullscreen = false,
-        resizable = true,
-        pixelperfect = false,
-        highdpi = true
-    })
-    push:setBorderColor(1, 0.859, 0.686, 1)
+    -- Get the screen resolution
+    windowWidth, windowHeight = love.window.getDesktopDimensions()
 
-    font = love.graphics.newFont(fontPath, fontSize)
+    -- Set fullscreen mode
+   -- Set a fixed window size for testing (480x320)
+	windowWidth, windowHeight = 1920, 1080
+	love.window.setMode(windowWidth, windowHeight, {fullscreen = false, resizable = false})
+
+
+	scale, scaleX, scaleY, maxScale, scaledBoxThickness, scaledBoxHeight, fontSize = calculateScale(windowWidth, windowHeight, spriteWidth, spriteHeight)
+
+    
+  
+
+    -- Load font using calculated fontSize
+    font = love.graphics.newFont(fontPath, fontSize or baseFontSize)  -- Ensure fontSize is used if calculated
 
     -- Load assets
     cybion = love.graphics.newImage("assets/gfx/cybionImage.png")
-    cybion:setFilter("nearest", "nearest")
     spritesheet = love.graphics.newImage("assets/gfx/backgroundSheet.png")
-    spritesheet:setFilter("nearest", "nearest")
-    patchImage = love.graphics.newImage("assets/gfx/patchImage.png")
-    patchImage:setFilter("nearest", "nearest")
+    backgroundBase = love.graphics.newImage("assets/gfx/backgroundBase.png")
 
+    -- Load sounds
     Talkies.talkSound = love.audio.newSource("assets/sfx/typeSound.ogg", "static")
     Talkies.optionOnSelectSound = love.audio.newSource("assets/sfx/optionSelect.ogg", "static")
     Talkies.optionSwitchSound = love.audio.newSource("assets/sfx/optionSwitch.ogg", "static")
@@ -187,9 +192,15 @@ function love.load()
     Talkies.messageColor = outputTextColor
     Talkies.messageBorderColor = outputTextColor
     Talkies.titleColor = outputTextColor
+	Talkies.height = scaledBoxHeight
+	Talkies.thickness = scaledBoxThickness
 
-    startBackgroundMusic()
+
+   -- startBackgroundMusic()
 end
+
+
+
 
 -- Add a new variable for controlling the animation updates
 local animationUpdateInterval = 1 / frameRate 
@@ -219,39 +230,88 @@ function love.update(dt)
 end
 
 
-function love.draw()
-    push:start()
-
-    -- Draw animated spritesheet background
-    local frameX = (currentFrame - 1) * spriteWidth
-    local windowWidth, windowHeight = push:getWidth(), push:getHeight()
+function calculateScale(windowWidth, windowHeight, spriteWidth, spriteHeight)
+    local scale = math.min(windowWidth / spriteWidth, windowHeight / spriteHeight)
     local scaleX = windowWidth / spriteWidth
     local scaleY = windowHeight / spriteHeight
+    local maxScale = math.min(scaleX, scaleY)
 
-    love.graphics.draw(spritesheet, 
-                       love.graphics.newQuad(frameX, 0, spriteWidth, spriteHeight, spritesheet:getDimensions()), 
-                       0, 0, 0, scaleX, scaleY)
+    local scaledBoxThickness = math.floor(baseBoxThickness * maxScale) 
+	local scaledBoxHeight = math.floor(baseBoxHeight * scaleY) 
 
-    if patchInProgress then
-        love.graphics.draw(patchImage, 0, 0, 0, scaleX, scaleY)
+
+
+    if windowWidth >= 640 and windowHeight >= 480 then
+        fontSize = math.floor(baseFontSize * maxScale / 14) * 14 -- Ensure multiples of 14
+    else
+        fontSize = math.max(12, math.floor(baseFontSize * maxScale)) -- Round to integers, minimum 12
     end
 
+    print("Window:", windowWidth, windowHeight)
+    print("Sprite:", spriteWidth, spriteHeight)
+    print("Scale:", scale, "ScaleX:", scaleX, "ScaleY:", scaleY, "maxScale:", maxScale)
+    print("Scaled Box Thickness:", scaledBoxThickness)
+    print("Font Size:", fontSize)
+
+    return math.floor(scale), scaleX, scaleY, maxScale, scaledBoxThickness, scaledBoxHeight, fontSize
+end
+
+
+
+
+
+function love.draw()
+    -- Get the scaling factors
+    local scale, scaleX, scaleY, maxScale = calculateScale(windowWidth, windowHeight, spriteWidth, spriteHeight)
+
+    -- Calculate centering offsets based on uniform scale
+    local offsetX = math.floor((windowWidth - spriteWidth * scale) / 2)
+    local offsetY = windowHeight - (spriteHeight * scale)
+
+    -- Draw black-and-white background
+    love.graphics.setColor(1, 1, 1) -- White
+    love.graphics.rectangle("fill", 0, offsetY, windowWidth, windowHeight - offsetY)
+    love.graphics.setColor(0, 0, 0) -- Black
+    love.graphics.rectangle("fill", 0, 0, windowWidth, offsetY)
+
+    -- Reset color before drawing the sprite
+    love.graphics.setColor(1, 1, 1)
+
+    -- Calculate the position of the current frame on the spritesheet
+    local frameX = (currentFrame - 1) * spriteWidth
+
+    -- Create a new quad for the current frame
+    local frameQuad = love.graphics.newQuad(frameX, 0, spriteWidth, spriteHeight, spritesheet:getDimensions())
+
+    -- Draw the frame from the spritesheet
+    love.graphics.draw(
+        spritesheet,  -- The spritesheet image
+        frameQuad,    -- The current frame's quad
+        offsetX, offsetY,  -- Offsets for centering
+        0, scale, scale    -- Rotation (0) and uniform scaling
+    )
+
+    -- Draw dialogue using Talkies
     Talkies.draw()
 
+    -- Draw output text if needed
     if showOutput then
-        love.graphics.setFont(font)
-        local lineSpacing = outputLineSpacing
+        love.graphics.setFont(font)  -- Set the font for drawing text
+        local lineSpacing = outputLineSpacing / scaleY
         local outputHeight = #patchOutput * lineSpacing
-        local outputY = math.max(windowHeight - outputHeight - outputPaddingY, 0)
+        local outputY = math.max(windowHeight - outputHeight - (outputPaddingY * scaleY), 0)
 
         for i, line in ipairs(patchOutput) do
-            love.graphics.setColor(outputTextColor)
-            love.graphics.print(line, outputPaddingX, outputY + (i - 1) * lineSpacing)
+            love.graphics.setColor(outputTextColor)  -- Set text color
+            love.graphics.print(line, outputPaddingX * scaleX, outputY + (i - 1) * lineSpacing)
         end
-    end
 
-    push:finish()
+        -- Reset the color back to white
+        love.graphics.setColor(1, 1, 1)
+    end
 end
+
+
 
 function love.gamepadpressed(joystick, button)
     if button == "a" then

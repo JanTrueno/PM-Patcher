@@ -149,7 +149,6 @@ local Talkies = {
   height                  = nil,
 }
 
-
 function Talkies.say(title, messages, config)
   config = config or {}
   if type(messages) ~= "table" then
@@ -279,7 +278,7 @@ function Talkies.draw()
 
   -- message box
   local boxW = windowWidth-(2*currentDialog.padding)
-  local boxH = Talkies.height or (windowHeight/6)-(2*currentDialog.padding)
+  local boxH = Talkies.height or (windowHeight/3)-(2*currentDialog.padding)
   local boxX = currentDialog.padding
   local boxY = windowHeight-(boxH+currentDialog.padding)
 
@@ -290,29 +289,27 @@ function Talkies.draw()
     imgW = currentDialog.image:getWidth() * imgScale
   end
 
--- title box
-local textX, textY = imgX + imgW + currentDialog.padding, boxY + 24
+  -- title box
+  local textX, textY = imgX + imgW + currentDialog.padding, boxY + 4
 
-love.graphics.setFont(currentDialog.font)
+  love.graphics.setFont(currentDialog.font)
 
-if currentDialog.title ~= "" then
-  local titleBoxW = currentDialog.font:getWidth(currentDialog.title) + (2 * currentDialog.padding)
-  local titleBoxH = currentDialog.fontHeight + currentDialog.padding
-  local titleBoxY = boxY - titleBoxH - (currentDialog.padding / 2)   -- Adjusted the position higher
-  local titleX, titleY = boxX + currentDialog.padding, titleBoxY + 2
-
-  -- Message title
-  love.graphics.setColor(currentDialog.titleBackgroundColor)
-  love.graphics.rectangle("fill", boxX, titleBoxY, titleBoxW, titleBoxH, currentDialog.rounding, currentDialog.rounding)
-  if currentDialog.thickness > 0 then
-    love.graphics.setColor(currentDialog.titleBorderColor)
-    love.graphics.rectangle("line", boxX, titleBoxY, titleBoxW, titleBoxH, currentDialog.rounding, currentDialog.rounding)
+  if currentDialog.title ~= "" then
+    local titleBoxW = currentDialog.font:getWidth(currentDialog.title)+(2*currentDialog.padding)
+    local titleBoxH = currentDialog.fontHeight+currentDialog.padding
+    local titleBoxY = boxY-titleBoxH-(currentDialog.padding/2)
+    local titleX, titleY = boxX + currentDialog.padding, titleBoxY + 2
+    
+    -- Message title
+    love.graphics.setColor(currentDialog.titleBackgroundColor)
+    love.graphics.rectangle("fill", boxX, titleBoxY, titleBoxW, titleBoxH, currentDialog.rounding, currentDialog.rounding)
+    if currentDialog.thickness > 0 then
+      love.graphics.setColor(currentDialog.titleBorderColor)
+      love.graphics.rectangle("line", boxX, titleBoxY, titleBoxW, titleBoxH, currentDialog.rounding, currentDialog.rounding)
+    end
+    love.graphics.setColor(currentDialog.titleColor)
+    love.graphics.print(currentDialog.title, titleX, titleY)
   end
-  love.graphics.setColor(currentDialog.titleColor)
-  love.graphics.print(currentDialog.title, titleX, titleY + 4)
-end
-
-
 
   -- Main message box
   love.graphics.setColor(currentDialog.messageBackgroundColor)
@@ -348,7 +345,7 @@ end
     
     local display = utf8.sub(displayLine, 1, positionAdd)
     
-    love.graphics.print(display, textX, (textY - 10) + textH * (lineNum - 1))
+    love.graphics.print(display, textX, textY + textH * (lineNum - 1))
     
     lineNum = lineNum + 1
   end
