@@ -354,16 +354,28 @@ function initClouds()
         cloudQuads[i + 1] = love.graphics.newQuad(i * 64, 0, 64, 64, cloudImage:getDimensions())
     end
 
-    -- Generate more random clouds with scaling
-    for i = 1, 15 do  -- Increase number of clouds
+    -- Define a minimum height for clouds, ensuring they stay above the ground (bottom 20%)
+    local minCloudY = windowHeight * 0.4  -- Clouds will be within the top 80% of the screen height
+
+    -- Increase number of clouds based on scaleY (higher scaleY, more clouds)
+    local numClouds = math.floor(10 * scaleY)  -- More clouds for taller screens
+
+    -- Generate random clouds, but now start them directly on screen
+    for i = 1, numClouds do  -- Adjusted cloud count based on scaleY
+        -- Calculate the Y-position with a preference for the top of the screen
+        local yPos = math.random() ^ 2 * minCloudY -50 -- Exponential bias, more clouds at the top
+
+        -- Ensure clouds start within the top 80% of the screen, above the bottom 20%
         table.insert(clouds, {
-            x = love.math.random(windowWidth, windowWidth * 2),  -- Start clouds from the right
-            y = love.math.random(20, windowHeight / 3),  
+            x = love.math.random(0, windowWidth * 1.5),  -- Cloud starts on screen, not offscreen
+            y = yPos,  -- Y-position with preference for the top
             quad = cloudQuads[love.math.random(1, 6)],  
-            speed = love.math.random(10, 30) * scale  -- Scale speed
+            speed = love.math.random(5, 20) * scale  -- Scale speed
         })
     end
 end
+
+
 
 
 function love.gamepadpressed(joystick, button)
