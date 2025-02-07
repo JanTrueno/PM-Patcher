@@ -6,7 +6,7 @@ local Talkies = require('talkies')
 local fontPath = "assets/font/Minecraftia-Regular.ttf"
 local baseFontSize = 12
 local baseBoxThickness = 1
-local baseBoxHeight = 30
+local baseBoxHeight = 32
 local outputPaddingX = 12
 local outputPaddingY = 6
 local outputLineSpacing = 30
@@ -30,6 +30,11 @@ local animationDuration = 1 / frameRate
 local timer = 0
 local dialogShown = false
 local patchChannel = love.thread.getChannel("patch_output")  -- Channel for output 
+
+local cloudImage
+local cloudQuads = {}
+local clouds = {}
+
 
 -- Function to parse command-line arguments
 local function parseCommandLineArguments()
@@ -161,13 +166,13 @@ function love.load()
 
     -- Set fullscreen mode
    -- Set a fixed window size for testing (480x320)
-	windowWidth, windowHeight = 1920, 1080
+	windowWidth, windowHeight = 640, 480
 	love.window.setMode(windowWidth, windowHeight, {fullscreen = false, resizable = false})
 
 
 	scale, scaleX, scaleY, maxScale, scaledBoxThickness, scaledBoxHeight, fontSize = calculateScale(windowWidth, windowHeight, spriteWidth, spriteHeight)
 
-    
+    initClouds()
   
 
     -- Load font using calculated fontSize
@@ -176,7 +181,6 @@ function love.load()
     -- Load assets
     cybion = love.graphics.newImage("assets/gfx/cybionImage.png")
     spritesheet = love.graphics.newImage("assets/gfx/backgroundSheet.png")
-    backgroundBase = love.graphics.newImage("assets/gfx/backgroundBase.png")
 
     -- Load sounds
     Talkies.talkSound = love.audio.newSource("assets/sfx/typeSound.ogg", "static")
@@ -208,7 +212,7 @@ local animationTimer = 0
 
 function love.update(dt)
     Talkies.update(dt)
-
+	 updateClouds(dt)  -- Update cloud positions
     -- Update animation timer every frame
     animationTimer = animationTimer + dt
     if animationTimer >= animationUpdateInterval then
@@ -237,7 +241,7 @@ function calculateScale(windowWidth, windowHeight, spriteWidth, spriteHeight)
     local maxScale = math.min(scaleX, scaleY)
 
     local scaledBoxThickness = math.floor(baseBoxThickness * maxScale) 
-	local scaledBoxHeight = math.floor(baseBoxHeight * scaleY) 
+	local scaledBoxHeight = math.floor(baseBoxHeight * scale) 
 
 
 
@@ -258,8 +262,6 @@ end
 
 
 
-
-
 function love.draw()
     -- Get the scaling factors
     local scale, scaleX, scaleY, maxScale = calculateScale(windowWidth, windowHeight, spriteWidth, spriteHeight)
@@ -268,12 +270,20 @@ function love.draw()
     local offsetX = math.floor((windowWidth - spriteWidth * scale) / 2)
     local offsetY = windowHeight - (spriteHeight * scale)
 
-    -- Draw black-and-white background
-    love.graphics.setColor(1, 1, 1) -- White
-    love.graphics.rectangle("fill", 0, offsetY, windowWidth, windowHeight - offsetY)
-    love.graphics.setColor(0, 0, 0) -- Black
-    love.graphics.rectangle("fill", 0, 0, windowWidth, offsetY)
+    -- Draw white on top
+    love.graphics.setColor(0.502, 0.816, 1.0)
 
+    love.graphics.rectangle("fill", 0, 0, windowWidth, windowHeight)
+
+    -- Draw black on bottom
+    love.graphics.setColor(1.0, 0.858, 0.686)
+
+    love.graphics.rectangle("fill", 0, windowHeight - ( 46 * scale), windowWidth, windowHeight)
+	
+	 -- Draw clouds
+    drawClouds()
+	
+	
     -- Reset color before drawing the sprite
     love.graphics.setColor(1, 1, 1)
 
@@ -285,11 +295,11 @@ function love.draw()
 
     -- Draw the frame from the spritesheet
     love.graphics.draw(
-        spritesheet,  -- The spritesheet image
+       spritesheet,  -- The spritesheet image
         frameQuad,    -- The current frame's quad
         offsetX, offsetY,  -- Offsets for centering
         0, scale, scale    -- Rotation (0) and uniform scaling
-    )
+		)
 
     -- Draw dialogue using Talkies
     Talkies.draw()
@@ -311,6 +321,49 @@ function love.draw()
     end
 end
 
+function drawClouds()
+    love.graphics.setColor(1, 1, 1)  -- Set color for clouds
+    
+    -- Draw each cloud using its calculated scale
+    for _, cloud in ipairs(clouds) do
+        love.graphics.draw(cloudImage, cloud.quad, cloud.x, cloud.y, 0, scale, scale)
+    end
+
+    love.graphics.setColor(1, 1, 1)  -- Reset color
+end
+
+function updateClouds(dt)
+    for _, cloud in ipairs(clouds) do
+        -- Move clouds leftward based on speed
+        cloud.x = cloud.x - cloud.speed * dt
+
+        -- If the cloud moves off the left side, bring it back from the right with a random Y position
+        if cloud.x < -64 * scale then
+            cloud.x = love.math.random(windowWidth, windowWidth * 2)  -- Start from the right again
+            cloud.y = love.math.random(20, windowHeight / 3)  -- Random Y position
+        end
+    end
+end
+
+
+function initClouds()
+    cloudImage = love.graphics.newImage("assets/gfx/clouds-1.png")  -- Load cloud spritesheet
+
+    -- Create quads (each cloud is 64x64, 6 clouds in a row)
+    for i = 0, 5 do
+        cloudQuads[i + 1] = love.graphics.newQuad(i * 64, 0, 64, 64, cloudImage:getDimensions())
+    end
+
+    -- Generate more random clouds with scaling
+    for i = 1, 15 do  -- Increase number of clouds
+        table.insert(clouds, {
+            x = love.math.random(windowWidth, windowWidth * 2),  -- Start clouds from the right
+            y = love.math.random(20, windowHeight / 3),  
+            quad = cloudQuads[love.math.random(1, 6)],  
+            speed = love.math.random(10, 30) * scale  -- Scale speed
+        })
+    end
+end
 
 
 function love.gamepadpressed(joystick, button)
