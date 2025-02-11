@@ -18,6 +18,7 @@ local initialDialogDelay = 1
 local gameName = "the game"
 local patchTime = "5 minutes"
 local patchScript = "patch_script.sh"  -- Default patch script
+local messagesFile = "messages.lua"  -- Default messages file
 
 -- Variables
 local patchOutput = {}
@@ -35,25 +36,57 @@ local cloudImage
 local cloudQuads = {}
 local clouds = {}
 
+local messages = {}  -- Will hold custom or default messages
+
 
 -- Function to parse command-line arguments
 local function parseCommandLineArguments()
     if arg and #arg > 0 then
         for i = 1, #arg do
             if arg[i] == "-f" and arg[i + 1] and arg[i + 1] ~= "" then
-                patchScript = arg[i + 1] 
-                i = i + 1 
+                patchScript = arg[i + 1]
+                i = i + 1
             elseif arg[i] == "-g" and arg[i + 1] and arg[i + 1] ~= "" then
-                gameName = arg[i + 1] 
-                i = i + 1  
+                gameName = arg[i + 1]
+                i = i + 1
             elseif arg[i] == "-t" and arg[i + 1] and arg[i + 1] ~= "" then
-                patchTime = arg[i + 1] 
-                i = i + 1  
+                patchTime = arg[i + 1]
+                i = i + 1
+            elseif arg[i] == "-m" and arg[i + 1] and arg[i + 1] ~= "" then
+                messagesFile = arg[i + 1]  -- Set custom messages file
+                i = i + 1
             end
         end
     end
 end
 
+-- Default messages (fallback)
+local defaultMessages = {
+    intro1 = "Hello! Welcome to the PortMaster patching shop. Today we will be patching " .. gameName .. " for you.",
+    intro2 = "The patch will take " .. patchTime .. ". So grab some coffee while you wait. Press A to start the patching process.",
+    complete = "Thank you for waiting, the patching process is complete! Press A to proceed to " .. gameName .. ".",
+    failed = "Patching failed! Please go to the PortMaster Discord for help."
+}
+
+-- Function to load external messages
+local function loadExternalMessages(filePath)
+    local file = io.open(filePath, "r")
+    if not file then
+        print("Failed to load messages from:", filePath)
+        return nil
+    end
+
+    local content = file:read("*a")  -- Read entire file as string
+    file:close()
+
+    local chunk, err = load(content, "messages", "t", {})
+    if not chunk then
+        print("Error loading messages:", err)
+        return nil
+    end
+
+    return chunk()  -- Execute the Lua file and return the table
+end
 
 -- Function to wrap text to a maximum line length
 function wrapText(text, limit)
@@ -112,14 +145,14 @@ function startPatchThread()
     showOutput = true
 end
 
--- Function to show the initial Talkies dialog with two messages
+-- Function to show the initial Talkies dialog
 function showInitialTalkiesDialog()
-    Talkies.say("Cybion", "Hello! Welcome to the PortMaster patching shop. Today we will be patching " .. gameName .. " for you.", {
+    Talkies.say("Cybion", messages.intro1, {
         image = cybion,
         oncomplete = function()
-            Talkies.say("Cybion", "The patch will take " .. patchTime .. ". So grab some coffee while you wait. Press A to start the patching process.", {
+            Talkies.say("Cybion", messages.intro2, {
                 image = cybion,
-                oncomplete = startPatchThread  -- Start the patching in a new thread
+                oncomplete = startPatchThread
             })
         end
     })
@@ -127,23 +160,20 @@ end
 
 -- Function to show patch complete dialog
 function PatchComplete()
-    Talkies.say("Cybion", "Thank you for waiting, the patching process is complete! Press A to proceed to " .. gameName .. ".", {
-        thickness = scaledBoxThickness,
+    Talkies.say("Cybion", messages.complete, {
         image = cybion,
         oncomplete = function()
-            love.event.quit()  
+            love.event.quit()
         end
     })
 end
 
 -- Function to show patch failed dialog
 function PatchFailed()
-    Talkies.say("Cybion", "Patching failed! Please go to the PortMaster Discord for help.", {
-        thickness = scaledBoxThickness,
-		height = scaledBoxHeight,
+    Talkies.say("Cybion", messages.failed, {
         image = cybion,
         oncomplete = function()
-            love.event.quit()  
+            love.event.quit()
         end
     })
 end
@@ -199,7 +229,16 @@ function love.load()
 	Talkies.height = scaledBoxHeight
 	Talkies.thickness = scaledBoxThickness
 
-
+	-- Try to load custom messages
+    local customMessages = loadExternalMessages(messagesFile)
+    if customMessages then
+        print("Custom messages loaded from", messagesFile)
+        messages = customMessages
+    else
+        print("Using default messages.")
+        messages = defaultMessages
+    end
+	
    -- startBackgroundMusic()
 end
 
@@ -271,12 +310,13 @@ function love.draw()
     local offsetY = windowHeight - (spriteHeight * scale)
 
     -- Draw white on top
-    love.graphics.setColor(0.502, 0.816, 1.0)
+   love.graphics.setColor(1.0, 0.858, 0.686)
 
     love.graphics.rectangle("fill", 0, 0, windowWidth, windowHeight)
 
     -- Draw black on bottom
-    love.graphics.setColor(1.0, 0.858, 0.686)
+   love.graphics.setColor(1.0, 0.612, 0.443)
+
 
     love.graphics.rectangle("fill", 0, windowHeight - ( 46 * scale), windowWidth, windowHeight)
 	
@@ -358,7 +398,7 @@ function initClouds()
     local minCloudY = windowHeight * 0.4  -- Clouds will be within the top 80% of the screen height
 
     -- Increase number of clouds based on scaleY (higher scaleY, more clouds)
-    local numClouds = math.floor(10 * scaleY)  -- More clouds for taller screens
+    local numClouds = math.floor(100)  -- More clouds for taller screens
 
     -- Generate random clouds, but now start them directly on screen
     for i = 1, numClouds do  -- Adjusted cloud count based on scaleY
