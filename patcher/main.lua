@@ -4,8 +4,8 @@ local Talkies = require('talkies')
 -- Configuration tables
 local Config = {
     WINDOW = {
-        DEFAULT_WIDTH = 640,
-        DEFAULT_HEIGHT = 480,
+        DEFAULT_WIDTH = 1920,
+        DEFAULT_HEIGHT = 1080,
         FULLSCREEN = false,
         RESIZABLE = false
     },
@@ -28,10 +28,10 @@ local Config = {
         FRAME_COUNT = 24,
         FRAME_RATE = 12
     },
-    COLORS = {
-        SKY = {1.0, 0.858, 0.686},
-        GROUND = {1.0, 0.612, 0.443}
-    }
+	COLORS = {
+		SKY = {0.502, 0.816, 1.0},   -- Light blue sky
+		GROUND = {1.0, 0.858, 0.686} -- Warm ground tone
+	}
 }
 
 local Assets = {
@@ -119,21 +119,21 @@ local Utils = {
         return wrappedText
     end,
 
-    calculateScale = function()
-        local scaleX = GameState.windowWidth / Config.SPRITE.WIDTH
-        local scaleY = GameState.windowHeight / Config.SPRITE.HEIGHT
-        GameState.scale = math.min(scaleX, scaleY)
-        
-        return {
-            scale = GameState.scale,
-            scaleX = scaleX,
-            scaleY = scaleY,
-            maxScale = math.min(scaleX, scaleY),
-            boxThickness = math.floor(Config.DIALOG.BOX_THICKNESS * GameState.scale),
-            boxHeight = math.floor(Config.DIALOG.BOX_HEIGHT * GameState.scale),
-            fontSize = math.max(12, math.floor(Config.FONT.BASE_SIZE * GameState.scale))
-        }
-    end,
+	calculateScale = function()
+		local scaleX = GameState.windowWidth / Config.SPRITE.WIDTH
+		local scaleY = GameState.windowHeight / Config.SPRITE.HEIGHT
+		GameState.scale = math.floor(math.min(scaleX, scaleY)) -- Force integer scaling
+		
+		return {
+			scale = GameState.scale,
+			scaleX = scaleX,
+			scaleY = scaleY,
+			maxScale = math.min(scaleX, scaleY),
+			boxThickness = math.floor(Config.DIALOG.BOX_THICKNESS * GameState.scale),
+			boxHeight = math.floor(Config.DIALOG.BOX_HEIGHT * GameState.scale),
+			fontSize = math.max(12, math.floor(Config.FONT.BASE_SIZE * GameState.scale))
+		}
+	end,
 	
 	loadMessages = function()
     -- Try to load custom messages first
@@ -249,54 +249,95 @@ DialogSystem = {
     end
 }
 
+
 CloudSystem = {
     init = function()
         Resources.cloudImage = love.graphics.newImage(Assets.IMAGES.CLOUDS)
-        
+        Resources.cloudQuads = {}
+
         -- Create cloud quads
-        for i = 0, 5 do
-            Resources.cloudQuads[i + 1] = love.graphics.newQuad(
-                i * 64, 0, 64, 64,
+        for i = 1, 6 do
+            Resources.cloudQuads[i] = love.graphics.newQuad(
+                (i - 1) * 64, 0, 64, 64,
                 Resources.cloudImage:getDimensions()
             )
         end
         
+        GameState.clouds = {}
         CloudSystem.generateClouds()
     end,
 
     generateClouds = function()
-        local minCloudY = GameState.windowHeight * 0.4
-        local numClouds = math.floor(100)
-        
+        local numClouds = 20
         for i = 1, numClouds do
-            local yPos = math.random() ^ 2 * minCloudY - 50
             table.insert(GameState.clouds, {
                 x = love.math.random(0, GameState.windowWidth * 1.5),
-                y = yPos,
+                y = love.math.random(20, GameState.windowHeight * 0.4),
                 quad = Resources.cloudQuads[love.math.random(1, 6)],
-                speed = love.math.random(5, 20) * GameState.scale
+                speed = love.math.random(5, 20) * GameState.scale,
+                alpha = 1,
+                fadeSpeed = love.math.random(0.1, 0.12),
+                fadeIn = false,
+                fadeDelay = love.math.random(0, 1),
+                lifetime = love.math.random(4, 8),
+                lifetimeTimer = 0
             })
         end
     end,
 
     update = function(dt)
         for _, cloud in ipairs(GameState.clouds) do
+            -- Move cloud
             cloud.x = cloud.x - cloud.speed * dt
+
+            -- Fade logic
+            if cloud.fadeDelay > 0 then
+                cloud.fadeDelay = cloud.fadeDelay - dt
+            else
+                if cloud.fadeIn then
+                    cloud.alpha = math.min(cloud.alpha + cloud.fadeSpeed * dt, 1)
+                    if cloud.alpha >= 1 then
+                        cloud.fadeIn = false
+                        cloud.lifetimeTimer = 0 -- Reset lifetime timer when fully visible
+                    end
+                else
+                    -- Fade out after being fully visible for a while
+                    cloud.lifetimeTimer = cloud.lifetimeTimer + dt
+                    if cloud.lifetimeTimer >= cloud.lifetime then
+                        cloud.alpha = math.max(cloud.alpha - cloud.fadeSpeed * dt, 0)
+                        if cloud.alpha <= 0 then
+                            cloud.fadeIn = true
+                            cloud.lifetimeTimer = 0 -- Reset lifetime when fading in
+                        end
+                    end
+                end
+            end
+
+            -- Reposition cloud when it leaves screen
             if cloud.x < -64 * GameState.scale then
-                cloud.x = love.math.random(GameState.windowWidth, GameState.windowWidth * 2)
+                cloud.x = GameState.windowWidth + love.math.random(50, 200)
                 cloud.y = love.math.random(20, GameState.windowHeight / 3)
+                cloud.alpha = 1
+                cloud.fadeIn = false
+                cloud.fadeDelay = love.math.random(0, 1) -- Random delay for each cloud
             end
         end
     end,
 
     draw = function()
-        love.graphics.setColor(1, 1, 1)
         for _, cloud in ipairs(GameState.clouds) do
+            love.graphics.setColor(1, 1, 1, cloud.alpha)
             love.graphics.draw(Resources.cloudImage, cloud.quad, 
                 cloud.x, cloud.y, 0, GameState.scale, GameState.scale)
         end
+        love.graphics.setColor(1, 1, 1) -- Reset color
     end
 }
+
+
+
+
+
 
 -- Add the SpriteSystem implementation
 SpriteSystem = {
@@ -313,29 +354,30 @@ SpriteSystem = {
         end
     end,
 
-    draw = function()
-        love.graphics.setColor(1, 1, 1)
-        local frameX = (GameState.currentFrame - 1) * Config.SPRITE.WIDTH
-        local frameQuad = love.graphics.newQuad(
-            frameX, 0,
-            Config.SPRITE.WIDTH,
-            Config.SPRITE.HEIGHT,
-            Resources.spritesheet:getDimensions()
-        )
-        
-        local offsetX = math.floor((GameState.windowWidth - Config.SPRITE.WIDTH * GameState.scale) / 2)
-        local offsetY = GameState.windowHeight - (Config.SPRITE.HEIGHT * GameState.scale)
-        
-        love.graphics.draw(
-            Resources.spritesheet,
-            frameQuad,
-            offsetX,
-            offsetY,
-            0,
-            GameState.scale,
-            GameState.scale
-        )
-    end,
+	draw = function()
+		love.graphics.setColor(1, 1, 1)
+		local frameX = (GameState.currentFrame - 1) * Config.SPRITE.WIDTH
+		local frameQuad = love.graphics.newQuad(
+			frameX, 0,
+			Config.SPRITE.WIDTH,
+			Config.SPRITE.HEIGHT,
+			Resources.spritesheet:getDimensions()
+		)
+		
+		-- Round the position to the nearest integer
+		local offsetX = math.floor((GameState.windowWidth - Config.SPRITE.WIDTH * GameState.scale) / 2 + 0.5)
+		local offsetY = math.floor(GameState.windowHeight - (Config.SPRITE.HEIGHT * GameState.scale) + 0.5)
+		
+		love.graphics.draw(
+			Resources.spritesheet,
+			frameQuad,
+			offsetX,
+			offsetY,
+			0,
+			GameState.scale,
+			GameState.scale
+		)
+	end,
 
     -- Helper function to get current frame info
     getCurrentFrame = function()
